@@ -7,97 +7,118 @@ import matplotlib.pyplot as plt
 
 class NeuralNet:
 
-    def __init__(self, input_size, output_size, hidden_layer_sizes):
+    def __init__(self, input_size, layers, loss="CrossEntropy"):
+        """
+        layer_configs = [
+            {"linear": "Affine", "activation": "ReLU", "size": 5},
+            ...,
+            {"linear": "Affine", "activation": "Sigmoid", "size": 1}
+        ]
+        """
+
+        self.linear = {
+            "Affine": Affine
+        }
 
         self.activation = {
             "ReLU": ReLU,
             "Sigmoid": Sigmoid,
-            "TangentH": TangentH
+            "TangentH": TangentH,
+            "SoftMax": SoftMax
+        }
+
+        self.loss = {
+            "CrossEntropy": CrossEntropy,
         }
 
         # Add layers
         self.layers = []
 
-        layer_sizes = [input_size] + \
-            hidden_layer_sizes + \
-            [output_size]
-
-        L = len(layer_sizes)
-        for i in range(1, L):
+        prev_layer_size = None
+        for i, layer in enumerate(layers):
             self.add_layer(
-                layer_sizes[i],
-                layer_sizes[i - 1],
-                "Sigmoid" if i == L - 1 else "ReLU"
+                linear = layer["linear"],
+                rows = layer["size"],
+                cols = prev_layer_size or input_size,
+                activation = layer["activation"]
             )
 
+            prev_layer_size = layer["size"]
+
         # Layer for calculating cost
-        self.last_layer = CrossEntropy()
+        self.last_layer = self.loss[loss]()
 
 
     # Add Affine - Activation layer
-    def add_layer(self, rows, cols, activation):
-        self.layers.append(Affine(rows, cols))
+    def add_layer(self, linear, rows, cols, activation):
+        self.layers.append(self.linear[linear](rows, cols))
         self.layers.append(self.activation[activation]())
 
 
-    # Predict output by forward propagation
-    # It does not propagate over last layer.
-    def predict(self, X):
+    def forward_propagate(self, X, Y):
         A = X
         for layer in self.layers:
+            # print("Forwardpropagating layer " + str(layer))
             A = layer.forward(A)
-        return A
-
-
-    # Caculate cost by forward propagation
-    # It does propagate over last layer.
-    def cost(self, X, Y):
-        _, m = X.shape
-        A = self.predict(X)
+        # print("Prediction: ")
+        # print(A)
         cost = self.last_layer.forward(A, Y)
-        return cost
+        accuracy = self.accuracy(A, Y)
 
+        return cost, accuracy
 
-    # Calculate prediction accuracy
-    def accuracy(self, X, Y):
-        A = self.predict(X)
-        Y_hat = A > 0.5
+    
+    def accuracy(self, A, Y):
+        Y_hat = np.argmax(A, axis=0)
+        Y = np.argmax(Y, axis=0)
+
         return np.mean(Y_hat == Y)
 
 
-    # Caculate gradient by backward propagation
-    # Gradient and parameter values are managed by layer class.
-    def gradient(self, X, Y):
+
+    def backward_propagate(self, lr):
         dA = self.last_layer.backward()
         for layer in reversed(self.layers):
+            # print("Backpropagating layer " + str(layer))
             dA = layer.backward(dA)
+            # print("dA: ")
+            # print(dA)
+            if isinstance(layer, Affine):
+                layer.update(lr)
+                # print("Updated layer " + str(layer))
+        return dA
 
 
-    def train(self, X, Y, num_iter=3000, lr=0.01):
+    def train(self, X, Y, epochs=100, batch_size=1000, lr=0.01, verbose=True):
 
         costs = []
+        accuracies = []
+        _, train_size = X.shape
+        iter_per_epoch = max(np.floor(train_size/batch_size), 1)
+        max_iter = int(epochs*iter_per_epoch)
 
-        for j in range(num_iter):
-            # Forward propagation
-            cost = self.cost(X, Y)
+        for i in range(max_iter):
 
-            # Backward propagation
-            self.gradient(X, Y)
+            batch = np.random.choice(train_size, batch_size)
+            X_batch = X[:, batch]
+            Y_batch = Y[:, batch]
 
-            # Update parameters
-            for layer in self.layers:
-                if isinstance(layer, Affine):
-                    layer.update(lr)
+            cost, accuracy = self.forward_propagate(X_batch, Y_batch)
+            self.backward_propagate(lr)
 
             # Show cost on console
-            if j % 100 == 0:
-                print(f"Cost for iteration {j}: {float(cost)}")
+            if i % 100 == 0:
                 costs.append(cost)
+                accuracies.append(accuracy)
+                print(f"Iteration {i} | cost: {float(cost):.6f}")
 
-        # Draw cost graph
-        plt.plot(np.squeeze(costs))
-        plt.xlabel("Iterations (per hundreds)")
-        plt.ylabel("Cost")
-        plt.title("Cost curve")
-        plt.show()
+        if verbose:
+            # Draw cost graph
+            plt.plot(np.squeeze(zip(costs, accuracies)))
+            plt.xlabel("Iterations (per hundreds)")
+            plt.ylabel("Cost")
+            plt.title("Cost curve")
+            plt.show()
+
+
 
