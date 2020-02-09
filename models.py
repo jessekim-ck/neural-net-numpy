@@ -7,53 +7,34 @@ import matplotlib.pyplot as plt
 
 class NeuralNet:
 
-    def __init__(self, input_size, layers, loss="CrossEntropy"):
-        """
-        layers = [
-            {"linear": "Affine", "activation": "ReLU", "size": 5},
-            ...,
-            {"linear": "Affine", "activation": "Sigmoid", "size": 1}
-        ]
-        """
+    def __init__(self):
 
-        # List of linear layer class
-        self.linear = {
-            "Affine": Affine
-        }
-
-        # List of activation layer class
-        self.activation = {
+        # List layer class
+        self.layer_list = {
+            "Affine": Affine,
+            "Convolution": Convolution,
+            "Pooling": Pooling,
             "ReLU": ReLU,
             "Sigmoid": Sigmoid,
             "TangentH": TangentH,
-            "SoftMax": SoftMax
-        }
-
-        # List of loss layer class
-        self.loss = {
+            "SoftMax": SoftMax,
             "CrossEntropy": CrossEntropy,
             "MeanSquaredError": MeanSquaredError
         }
 
         self.layers = []
+        self.last_layer = None
 
-        prev_layer_size = None
-        for i, layer in enumerate(layers):
-            self.add_layer(
-                linear = layer["linear"],
-                rows = layer["size"],
-                cols = prev_layer_size or input_size,
-                activation = layer["activation"]
-            )
+    # Add and initialze layer.
+    def add_layer(self, layer, X, **kwargs):
+        layer = self.layer_list[layer](**kwargs)
+        A = layer.initialize(X)
+        self.layers.append(layer)
+        return A
 
-            prev_layer_size = layer["size"]
-
-        self.last_layer = self.loss[loss]()
-
-    # Add linear-activation layer set.
-    def add_layer(self, linear, rows, cols, activation):
-        self.layers.append(self.linear[linear](rows, cols))
-        self.layers.append(self.activation[activation]())
+    # Add loss layer. 
+    def set_loss(self, loss="CrossEntropy"):
+        self.last_layer = self.layer_list[loss]()
 
     # Predict output given data.
     def predict(self, X):
@@ -91,17 +72,22 @@ class NeuralNet:
     # Need to be componentized for various optimization algorithm.
     def update_params(self, lr):
         for layer in reversed(self.layers):
-            if isinstance(layer, Affine):
+            if isinstance(layer, Affine) or isinstance(layer, Convolution):
                 layer.W -= lr*layer.dW
                 layer.b -= lr*layer.db
 
+    # Train model.
     def train(self, X, Y, epochs=20, batch_size=100, lr=0.01, verbose=True):
 
         costs = []
         accuracies = []
 
-        _, train_size = X.shape
-        iter_per_epoch = max(np.floor(train_size/batch_size), 1)
+        if X.ndim == 4:
+            train_size = X.shape[0]
+        else:
+            train_size = X.shape[1]
+
+        iter_per_epoch = max(int(train_size/batch_size), 1)
         max_iter = int(epochs*iter_per_epoch)
 
         for i in range(max_iter):
@@ -110,7 +96,10 @@ class NeuralNet:
 
             # Sample batch
             batch = np.random.choice(train_size, batch_size)
-            X_batch = X[:, batch]
+            if X.ndim == 4:
+                X_batch = X[batch]
+            else:
+                X_batch = X[:, batch]
             Y_batch = Y[:, batch]
 
             # Forward propagation
@@ -124,7 +113,7 @@ class NeuralNet:
 
             # Record cost/accuracy per epochs
             if i % iter_per_epoch == 0:
-                cost, accuracy = self.forward_propagate(X, Y)
+                cost, accuracy = self.forward_propagate(X_batch, Y_batch)
                 costs.append(cost)
                 accuracies.append(accuracy)
                 print(f"Epoch {int(i/iter_per_epoch)} | cost: {float(cost):.6f} | accuracy: {float(accuracy):.4f}")
