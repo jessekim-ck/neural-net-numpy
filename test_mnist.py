@@ -44,7 +44,7 @@ network = NeuralNet()
 
 # Add layers to the network
 A = X_train
-A = network.add_layer("Convolution", A, num_filters=1, filter_h=3, filter_w=3)
+A = network.add_layer("Convolution", A, num_filters=4, filter_h=3, filter_w=3)
 A = network.add_layer("ReLU", A)
 A = network.add_layer("Pooling", A, pool_h=3, pool_w=3, stride=3)
 A = network.add_layer("Affine", A, num_units=15)

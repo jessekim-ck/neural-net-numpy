@@ -77,7 +77,7 @@ class NeuralNet:
                 layer.b -= lr*layer.db
 
     # Train model.
-    def train(self, X, Y, epochs=20, batch_size=100, lr=0.01, verbose=True):
+    def train(self, X, Y, epochs=10, batch_size=32, lr=0.001, verbose=True):
 
         costs = []
         accuracies = []
